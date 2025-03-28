@@ -85,11 +85,26 @@ export function QuizContainer({ questions }: QuizContainerProps) {
   // Calculate score on a 100-point scale
   const score = totalAttempted > 0 ? Math.round((correctAnswers / totalAttempted) * 100) : 0
 
+  // Reset quiz when questions change (due to subject filtering)
+  useEffect(() => {
+    setAskedQuestions([])
+    setCorrectAnswers(0)
+    setTotalAttempted(0)
+    localStorage.removeItem("askedQuestions")
+    localStorage.removeItem("correctAnswers")
+    localStorage.removeItem("totalAttempted")
+    selectQuestion()
+    setIsLoading(false)
+  }, [questions])
+
   // Load asked questions from localStorage on component mount
   useEffect(() => {
     const storedAskedQuestions = localStorage.getItem("askedQuestions")
     if (storedAskedQuestions) {
-      setAskedQuestions(JSON.parse(storedAskedQuestions))
+      // Only load stored questions that are still in the filtered set
+      const parsedQuestions = JSON.parse(storedAskedQuestions)
+      const validQuestions = parsedQuestions.filter((qNum: number) => questions.some((q) => q.questionNumber === qNum))
+      setAskedQuestions(validQuestions)
     }
 
     // Load score data from localStorage
