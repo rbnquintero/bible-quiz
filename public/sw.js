@@ -1,6 +1,6 @@
 // Service Worker for Preguntas Bíblicas PWA
-const CACHE_NAME = "biblical-quiz-v1"
-const VERSION = "1.0.0"
+const CACHE_NAME = "biblical-quiz-v1.1"
+const VERSION = "1.2.0"
 
 // Assets to cache on install - include ALL critical resources
 const STATIC_ASSETS = [
@@ -8,59 +8,143 @@ const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/icon-192x192.png",
   "/icon-512x512.png",
-  // Add the data file containing questions
+  "/offline-image.png",
+  "/offline.js",
   "/data/questions.json",
-  // Add critical JavaScript and CSS files
-  "/_next/static/chunks/main.js",
-  "/_next/static/chunks/webpack.js",
-  "/_next/static/chunks/pages/_app.js",
-  "/_next/static/chunks/pages/index.js",
-  "/_next/static/css/main.css",
 ]
+
+// Create a fallback HTML page for offline navigation
+const OFFLINE_HTML = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preguntas Bíblicas - Modo Sin Conexión</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.5; padding: 2rem; max-width: 600px; margin: 0 auto; }
+    h1 { color: #4f46e5; }
+    .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1.5rem; margin: 2rem 0; }
+    .btn { background: #4f46e5; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Preguntas Bíblicas</h1>
+  <div class="card">
+    <h2>Modo Sin Conexión</h2>
+    <p>Actualmente estás sin conexión a internet. Algunas funciones pueden estar limitadas.</p>
+    <p>Intenta volver a la página principal cuando recuperes la conexión.</p>
+    <button class="btn" onclick="window.location.href='/'">Intentar Nuevamente</button>
+  </div>
+</body>
+</html>
+`
 
 // Install event - cache static assets
 self.addEventListener("install", (event) => {
+  console.log("[Service Worker] Installing new service worker...")
+
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      // Pre-cache the specified static assets
-      return cache.addAll(STATIC_ASSETS).catch((error) => {
-        console.error("Pre-caching failed:", error)
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => {
+        console.log("[Service Worker] Caching app shell and content")
+        // Pre-cache the specified static assets
+        return cache.addAll(STATIC_ASSETS).then(() => {
+          // Also cache an offline page
+          return cache.put(
+            new Request("/offline"),
+            new Response(OFFLINE_HTML, {
+              headers: { "Content-Type": "text/html" },
+            }),
+          )
+        })
+      })
+      .catch((error) => {
+        console.error("[Service Worker] Pre-caching failed:", error)
         // Continue even if some assets fail to cache
         return Promise.resolve()
-      })
-    }),
+      }),
   )
 })
 
 // Activate event - clean up old caches
 self.addEventListener("activate", (event) => {
+  console.log("[Service Worker] Activating new service worker...")
+
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.filter((cacheName) => cacheName !== CACHE_NAME).map((cacheName) => caches.delete(cacheName)),
-      )
-    }),
+    caches
+      .keys()
+      .then((cacheNames) => {
+        return Promise.all(
+          cacheNames
+            .filter((cacheName) => cacheName !== CACHE_NAME)
+            .map((cacheName) => {
+              console.log("[Service Worker] Deleting old cache:", cacheName)
+              return caches.delete(cacheName)
+            }),
+        )
+      })
+      .then(() => {
+        console.log("[Service Worker] Claiming clients...")
+        return self.clients.claim()
+      }),
   )
-  // Take control of all clients immediately
-  event.waitUntil(self.clients.claim())
 })
+
+// Helper function to create a basic response
+const createBasicResponse = (text, status = 200, headers = {}) => {
+  return new Response(text, {
+    status: status,
+    headers: {
+      "Content-Type": "text/plain",
+      ...headers,
+    },
+  })
+}
 
 // Fetch event - serve from cache or network with improved offline handling
 self.addEventListener("fetch", (event) => {
-  // Skip non-GET requests and cross-origin requests
-  if (event.request.method !== "GET" || !event.request.url.startsWith(self.location.origin)) {
+  // Skip non-GET requests
+  if (event.request.method !== "GET") {
     return
   }
 
-  // Special handling for page navigations (HTML requests)
+  // Skip cross-origin requests
+  if (!event.request.url.startsWith(self.location.origin)) {
+    return
+  }
+
+  // Parse the URL
+  const url = new URL(event.request.url)
+  const pathname = url.pathname
+
+  // Handle page navigations (HTML requests)
   if (
     event.request.mode === "navigate" ||
-    (event.request.method === "GET" && event.request.headers.get("accept").includes("text/html"))
+    (event.request.method === "GET" && event.request.headers.get("accept")?.includes("text/html"))
   ) {
     event.respondWith(
       fetch(event.request).catch(() => {
-        // If navigation fails, serve the cached homepage
-        return caches.match("/")
+        // If navigation fails, try to serve the cached homepage
+        return caches.match("/").then((response) => {
+          // If we have the homepage cached, return it
+          if (response) {
+            return response
+          }
+
+          // Otherwise return the offline page
+          return caches.match("/offline").then((offlineResponse) => {
+            if (offlineResponse) {
+              return offlineResponse
+            }
+
+            // Last resort fallback
+            return createBasicResponse("Estás sin conexión y no se pudo cargar la página.", 503, {
+              "Content-Type": "text/html",
+            })
+          })
+        })
       }),
     )
     return
@@ -71,61 +155,61 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cachedResponse) => {
       // Return cached response if available
       if (cachedResponse) {
-        // Update cache in the background (for non-STATIC_ASSETS)
-        if (!STATIC_ASSETS.includes(new URL(event.request.url).pathname)) {
-          fetch(event.request)
-            .then((response) => {
-              if (response.ok) {
-                caches.open(CACHE_NAME).then((cache) => {
-                  cache.put(event.request, response)
-                })
-              }
-            })
-            .catch(() => {
-              /* Ignore network errors during background update */
-            })
-        }
         return cachedResponse
       }
 
       // If not in cache, try network
       return fetch(event.request)
-        .then((response) => {
+        .then((networkResponse) => {
           // Don't cache if not a valid response
-          if (!response || response.status !== 200) {
-            return response
+          if (!networkResponse || networkResponse.status !== 200) {
+            return networkResponse
           }
 
           // Clone the response to cache it and return it
-          const responseToCache = response.clone()
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache)
-          })
+          const responseToCache = networkResponse.clone()
+          caches
+            .open(CACHE_NAME)
+            .then((cache) => {
+              cache.put(event.request, responseToCache)
+            })
+            .catch((err) => {
+              console.error("[Service Worker] Error caching response:", err)
+            })
 
-          return response
+          return networkResponse
         })
         .catch((error) => {
-          console.error("Fetch failed:", error)
+          console.error("[Service Worker] Fetch failed:", error, event.request.url)
 
-          // For JavaScript or CSS files, return a fallback if possible
-          if (event.request.url.match(/\.(js|css)$/)) {
-            return caches.match("/offline.js")
+          // Provide appropriate fallbacks based on resource type
+
+          // For JavaScript files
+          if (pathname.endsWith(".js") || pathname.includes("/_next/static/chunks/")) {
+            return caches
+              .match("/offline.js")
+              .then((response) => response || createBasicResponse('console.log("Offline fallback JS");'))
           }
 
-          // For images, return a fallback image
-          if (event.request.url.match(/\.(jpg|jpeg|png|gif|svg)$/)) {
-            return caches.match("/offline-image.png")
+          // For CSS files
+          if (pathname.endsWith(".css")) {
+            return createBasicResponse("/* Offline fallback CSS */", 200, { "Content-Type": "text/css" })
           }
 
-          // For JSON data (like questions), return empty data
-          if (event.request.url.includes("/data/")) {
-            return new Response(JSON.stringify([]), {
-              headers: { "Content-Type": "application/json" },
-            })
+          // For images
+          if (pathname.match(/\.(jpg|jpeg|png|gif|svg|webp)$/) || pathname.includes("/image/")) {
+            return caches
+              .match("/offline-image.png")
+              .then((response) => response || createBasicResponse("Image not available offline", 503))
           }
 
-          // Otherwise, just propagate the error
-          throw error
+          // For JSON data (like questions)
+          if (pathname.endsWith(".json") || pathname.includes("/data/")) {
+            return createBasicResponse("[]", 200, { "Content-Type": "application/json" })
+          }
+
+          // Default fallback for any other resource type
+          return createBasicResponse("Resource not available offline", 503)
         })
     }),
   )
@@ -134,7 +218,15 @@ self.addEventListener("fetch", (event) => {
 // Message event - handle messages from clients
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
+    console.log("[Service Worker] Skip waiting and activate immediately")
     self.skipWaiting()
   }
 })
+
+// Log any errors that occur within the service worker
+self.addEventListener("error", (event) => {
+  console.error("[Service Worker] Error:", event.message, event.filename, event.lineno)
+})
+
+console.log("[Service Worker] Service worker registered with version", VERSION)
 

@@ -42,7 +42,7 @@ export function OfflineDetector() {
         <WifiOff className="h-4 w-4" />
         <AlertTitle>Sin conexión</AlertTitle>
         <AlertDescription>
-          Estás en modo sin conexión. Algunas funciones pueden estar limitadas, pero puedes seguir usando la aplicación.
+          Estás en modo sin conexión. La aplicación seguirá funcionando con los datos almacenados localmente.
         </AlertDescription>
       </Alert>
     )

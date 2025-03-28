@@ -18,14 +18,19 @@ export function PWAInstaller() {
     // Register service worker
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("/sw.js").then(
-          (registration) => {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .then((registration) => {
             console.log("ServiceWorker registration successful with scope: ", registration.scope)
-          },
-          (err) => {
-            console.log("ServiceWorker registration failed: ", err)
-          },
-        )
+
+            // Check for updates immediately after registration
+            registration.update().catch((err) => {
+              console.error("Service worker update check failed:", err)
+            })
+          })
+          .catch((err) => {
+            console.error("ServiceWorker registration failed: ", err)
+          })
       })
     }
 
