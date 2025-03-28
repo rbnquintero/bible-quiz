@@ -7,7 +7,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight } from 'lucide-react'
 
 // Define types for our quiz data
 interface QuizOption {
@@ -37,6 +37,24 @@ interface QuizQuestion {
   options: QuizOption
   answer: QuizAnswer
   context: QuizContext
+}
+
+// Function to determine badge color based on subject
+const getSubjectBadgeColor = (subject: string) => {
+  switch (subject) {
+    case "Conoce a Jesús":
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
+    case "Eres especial":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100"
+    case "Tu regalo especial":
+      return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100"
+    case "Los que te rodean":
+      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+    case "Observa la creación":
+      return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100"
+    default:
+      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100"
+  }
 }
 
 export default function Home() {
@@ -144,7 +162,11 @@ export default function Home() {
               <h3 className="text-lg font-semibold mb-2">Información Adicional</h3>
               <div className="space-y-4">
                 <div>
-                  <Badge className="mb-2">{currentQuestion.context.subject}</Badge>
+                  <Badge 
+                    className={`mb-2 ${getSubjectBadgeColor(currentQuestion.context.subject)}`}
+                  >
+                    {currentQuestion.context.subject}
+                  </Badge>
                   <h4 className="font-medium">{currentQuestion.context.title}</h4>
                 </div>
 
@@ -179,4 +201,3 @@ export default function Home() {
     </main>
   )
 }
-
