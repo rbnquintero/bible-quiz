@@ -7,7 +7,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, AlertTriangle } from "lucide-react"
 import confetti from "canvas-confetti"
 
 // Define types for our quiz data
@@ -81,9 +81,26 @@ export function QuizContainer({ questions }: QuizContainerProps) {
   const [askedQuestions, setAskedQuestions] = useState<number[]>([])
   const [correctAnswers, setCorrectAnswers] = useState(0)
   const [totalAttempted, setTotalAttempted] = useState(0)
+  const [isOnline, setIsOnline] = useState(true)
 
   // Calculate score on a 100-point scale
   const score = totalAttempted > 0 ? Math.round((correctAnswers / totalAttempted) * 100) : 0
+
+  // Check online status
+  useEffect(() => {
+    setIsOnline(navigator.onLine)
+
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }, [])
 
   // Reset quiz when questions change (due to subject filtering)
   useEffect(() => {
@@ -99,24 +116,31 @@ export function QuizContainer({ questions }: QuizContainerProps) {
 
   // Load asked questions from localStorage on component mount
   useEffect(() => {
-    const storedAskedQuestions = localStorage.getItem("askedQuestions")
-    if (storedAskedQuestions) {
-      // Only load stored questions that are still in the filtered set
-      const parsedQuestions = JSON.parse(storedAskedQuestions)
-      const validQuestions = parsedQuestions.filter((qNum: number) => questions.some((q) => q.questionNumber === qNum))
-      setAskedQuestions(validQuestions)
-    }
+    try {
+      const storedAskedQuestions = localStorage.getItem("askedQuestions")
+      if (storedAskedQuestions) {
+        // Only load stored questions that are still in the filtered set
+        const parsedQuestions = JSON.parse(storedAskedQuestions)
+        const validQuestions = parsedQuestions.filter((qNum: number) =>
+          questions.some((q) => q.questionNumber === qNum),
+        )
+        setAskedQuestions(validQuestions)
+      }
 
-    // Load score data from localStorage
-    const storedCorrectAnswers = localStorage.getItem("correctAnswers")
-    const storedTotalAttempted = localStorage.getItem("totalAttempted")
+      // Load score data from localStorage
+      const storedCorrectAnswers = localStorage.getItem("correctAnswers")
+      const storedTotalAttempted = localStorage.getItem("totalAttempted")
 
-    if (storedCorrectAnswers) {
-      setCorrectAnswers(Number.parseInt(storedCorrectAnswers))
-    }
+      if (storedCorrectAnswers) {
+        setCorrectAnswers(Number.parseInt(storedCorrectAnswers))
+      }
 
-    if (storedTotalAttempted) {
-      setTotalAttempted(Number.parseInt(storedTotalAttempted))
+      if (storedTotalAttempted) {
+        setTotalAttempted(Number.parseInt(storedTotalAttempted))
+      }
+    } catch (error) {
+      console.error("Error loading data from localStorage:", error)
+      // If there's an error, just continue with default values
     }
 
     selectQuestion()
@@ -125,14 +149,22 @@ export function QuizContainer({ questions }: QuizContainerProps) {
 
   // Update localStorage when score changes
   useEffect(() => {
-    localStorage.setItem("correctAnswers", correctAnswers.toString())
-    localStorage.setItem("totalAttempted", totalAttempted.toString())
+    try {
+      localStorage.setItem("correctAnswers", correctAnswers.toString())
+      localStorage.setItem("totalAttempted", totalAttempted.toString())
+    } catch (error) {
+      console.error("Error saving to localStorage:", error)
+    }
   }, [correctAnswers, totalAttempted])
 
   // Update localStorage when askedQuestions changes
   useEffect(() => {
-    if (askedQuestions.length > 0) {
-      localStorage.setItem("askedQuestions", JSON.stringify(askedQuestions))
+    try {
+      if (askedQuestions.length > 0) {
+        localStorage.setItem("askedQuestions", JSON.stringify(askedQuestions))
+      }
+    } catch (error) {
+      console.error("Error saving asked questions to localStorage:", error)
     }
   }, [askedQuestions])
 
@@ -141,7 +173,11 @@ export function QuizContainer({ questions }: QuizContainerProps) {
     // If all questions have been asked, reset the list
     if (askedQuestions.length >= questions.length) {
       setAskedQuestions([])
-      localStorage.removeItem("askedQuestions")
+      try {
+        localStorage.removeItem("askedQuestions")
+      } catch (error) {
+        console.error("Error removing from localStorage:", error)
+      }
     }
 
     // Filter out questions that have already been asked
@@ -153,6 +189,10 @@ export function QuizContainer({ questions }: QuizContainerProps) {
       setCurrentQuestion(selectedQuestion)
       setSelectedAnswer(null)
       setIsAnswered(false)
+    } else if (questions.length > 0) {
+      // If no available questions but we have questions, reset and try again
+      setAskedQuestions([])
+      selectQuestion()
     }
   }
 
@@ -189,9 +229,13 @@ export function QuizContainer({ questions }: QuizContainerProps) {
     setAskedQuestions([])
     setCorrectAnswers(0)
     setTotalAttempted(0)
-    localStorage.removeItem("askedQuestions")
-    localStorage.removeItem("correctAnswers")
-    localStorage.removeItem("totalAttempted")
+    try {
+      localStorage.removeItem("askedQuestions")
+      localStorage.removeItem("correctAnswers")
+      localStorage.removeItem("totalAttempted")
+    } catch (error) {
+      console.error("Error removing from localStorage:", error)
+    }
     selectQuestion()
   }
 
@@ -203,6 +247,22 @@ export function QuizContainer({ questions }: QuizContainerProps) {
           <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
         </div>
       </div>
+    )
+  }
+
+  // Handle case where there are no questions
+  if (questions.length === 0) {
+    return (
+      <Card className="p-6 text-center">
+        <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
+        <h2 className="text-xl font-semibold mb-2">No hay preguntas disponibles</h2>
+        <p className="text-muted-foreground mb-4">No se encontraron preguntas para los filtros seleccionados.</p>
+        {!isOnline && (
+          <p className="text-sm text-red-500 mt-2">
+            Estás en modo sin conexión. Algunas preguntas podrían no estar disponibles.
+          </p>
+        )}
+      </Card>
     )
   }
 
@@ -311,7 +371,7 @@ export function QuizContainer({ questions }: QuizContainerProps) {
             </Badge>
           </div>
         </div>
-        {askedQuestions.length === questions.length && (
+        {askedQuestions.length === questions.length && questions.length > 0 && (
           <p className="mt-2 font-medium text-primary">
             ¡Has completado todas las preguntas! El próximo ciclo comenzará con nuevas preguntas.
           </p>
