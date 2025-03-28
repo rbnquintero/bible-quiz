@@ -1,6 +1,6 @@
 // Service Worker for Preguntas Bíblicas PWA
-
 const CACHE_NAME = "biblical-quiz-v1"
+const VERSION = "1.0.0" // Increment this when you make significant changes
 
 // Assets to cache on install
 const STATIC_ASSETS = ["/", "/manifest.webmanifest", "/icon-192x192.png", "/icon-512x512.png"]
@@ -12,7 +12,9 @@ self.addEventListener("install", (event) => {
       return cache.addAll(STATIC_ASSETS)
     }),
   )
-  self.skipWaiting()
+  // Skip waiting forces the waiting service worker to become the active service worker
+  // Uncomment this line if you want updates to apply immediately (may disrupt user experience)
+  // self.skipWaiting();
 })
 
 // Activate event - clean up old caches
@@ -24,6 +26,7 @@ self.addEventListener("activate", (event) => {
       )
     }),
   )
+  // Claim clients forces the service worker to take control of all clients
   self.clients.claim()
 })
 
@@ -65,5 +68,12 @@ self.addEventListener("fetch", (event) => {
         })
     }),
   )
+})
+
+// Message event - handle messages from clients
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting()
+  }
 })
 

@@ -74,7 +74,18 @@ export function SubjectsList({ selectedSubjects, onSubjectToggle }: SubjectsList
 
       {selectedSubjects.length > 0 && (
         <div className="text-sm text-muted-foreground mt-2">
-          <p>Mostrando preguntas de: {selectedSubjects.join(", ")}</p>
+          <p className="flex flex-wrap items-center gap-1">
+            Mostrando preguntas de:
+            {selectedSubjects.map((subject, index) => {
+              const subjectData = subjects.find((s) => s.name === subject)
+              return (
+                <span key={subject}>
+                  <Badge className={`${subjectData?.color} ml-1`}>{subject}</Badge>
+                  {index < selectedSubjects.length - 1 && <span className="mx-1">,</span>}
+                </span>
+              )
+            })}
+          </p>
           <Button
             variant="link"
             size="sm"
