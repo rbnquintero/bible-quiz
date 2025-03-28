@@ -4,6 +4,7 @@ import { useState } from "react"
 import questions from './_questions.json'
 import { SubjectsList } from "./_subjects-list"
 import { QuizContainer } from "./_quiz-container"
+import { PWAInstaller } from "./_pwa-installer"
 
 export default function Home() {
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([])
@@ -29,6 +30,7 @@ export default function Home() {
         questions={filteredQuestions}
         key={selectedSubjects.join(",")} // Force re-render when selection changes
       />
+      <PWAInstaller />
     </main>
   )
 }
